@@ -5,6 +5,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
+using Aspire.Dashboard.Otlp.Storage;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -26,6 +27,7 @@ public class PlotlyChartTests : TestContext
         Services.AddLocalization();
         Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
         Services.AddSingleton<BrowserTimeProvider, TestTimeProvider>();
+        Services.AddSingleton<TelemetryRepository>();
 
         var model = new InstrumentViewModel();
 
@@ -50,6 +52,7 @@ public class PlotlyChartTests : TestContext
         Services.AddLocalization();
         Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
         Services.AddSingleton<BrowserTimeProvider, TestTimeProvider>();
+        Services.AddSingleton<TelemetryRepository>();
 
         var options = new TelemetryLimitOptions();
         var instrument = new OtlpInstrument
