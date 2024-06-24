@@ -146,7 +146,8 @@ function getThemeColors() {
     var style = getComputedStyle(document.body);
     return {
         backgroundColor: style.getPropertyValue("--fill-color"),
-        textColor: style.getPropertyValue("--neutral-foreground-rest")
+        textColor: style.getPropertyValue("--neutral-foreground-rest"),
+        pointColor: style.getPropertyValue("--accent-fill-rest")
     };
 }
 
@@ -163,12 +164,23 @@ function fixTraceLineRendering(chartDiv) {
 
     if (parent.childNodes.length > 0) {
         for (var i = 1; i < parent.childNodes.length; i++) {
-            parent.insertBefore(parent.childNodes[i], parent.firstChild);
+            var child = parent.childNodes[i];
+            parent.insertBefore(child, parent.firstChild);
+        }
+
+        // Check if there is a trace with points. It should be top most.
+        for (var i = 0; i < parent.childNodes.length; i++) {
+            var child = parent.childNodes[i];
+            if (child.querySelector(".point")) {
+                // Append trace to parent to move to the last in the collection.
+                parent.appendChild(child);
+            }
         }
     }
 }
 
-window.updateChart = function (id, traces, xValues, rangeStartTime, rangeEndTime) {
+window.updateChart = function (id, traces, xValues, exemplarPoints, rangeStartTime, rangeEndTime) {
+    //return;
     var chartContainerDiv = document.getElementById(id);
     var chartDiv = chartContainerDiv.firstChild;
 
@@ -177,16 +189,34 @@ window.updateChart = function (id, traces, xValues, rangeStartTime, rangeEndTime
     var xUpdate = [];
     var yUpdate = [];
     var tooltipsUpdate = [];
+    var traceData = [];
     for (var i = 0; i < traces.length; i++) {
         xUpdate.push(xValues);
         yUpdate.push(traces[i].values);
         tooltipsUpdate.push(traces[i].tooltips);
+        traceData.push([]);
     }
+
+    var xPoints = [];
+    var yPoints = [];
+    var pointTooltips = [];
+    var pointTraceData = [];
+    for (var j = 0; j < exemplarPoints.length; j++) {
+        xPoints.push(exemplarPoints[j].start);
+        yPoints.push(exemplarPoints[j].value);
+        pointTooltips.push(exemplarPoints[j].tooltip);
+        pointTraceData.push({ traceId: exemplarPoints[j].traceId, spanId: exemplarPoints[j].spanId });
+    }
+    xUpdate.push(xPoints);
+    yUpdate.push(yPoints);
+    tooltipsUpdate.push(pointTooltips);
+    traceData.push(pointTraceData);
 
     var data = {
         x: xUpdate,
         y: yUpdate,
         text: tooltipsUpdate,
+        traceData: traceData
     };
 
     var layout = {
@@ -204,7 +234,7 @@ window.updateChart = function (id, traces, xValues, rangeStartTime, rangeEndTime
     fixTraceLineRendering(chartDiv);
 };
 
-window.initializeChart = function (id, traces, xValues, rangeStartTime, rangeEndTime, serverLocale) {
+window.initializeChart = function (id, traces, xValues, exemplarPoints, rangeStartTime, rangeEndTime, serverLocale, chartInterop) {
     registerLocale(serverLocale);
 
     var chartContainerDiv = document.getElementById(id);
@@ -229,6 +259,38 @@ window.initializeChart = function (id, traces, xValues, rangeStartTime, rangeEnd
         };
         data.push(t);
     }
+
+    var xPoints = [];
+    var yPoints = [];
+    var pointsTrace = [];
+    var pointsTooltips = [];
+    for (var j = 0; j < exemplarPoints.length; j++) {
+        xPoints.push(exemplarPoints[j].start);
+        yPoints.push(exemplarPoints[j].value);
+        pointsTooltips.push(exemplarPoints[j].tooltip);
+        pointsTrace.push({ traceId: exemplarPoints[j].traceId, spanId: exemplarPoints[j].spanId });
+    }
+
+    var points = {
+        x: xPoints,
+        y: yPoints,
+        name: 'exemplars',
+        text: pointsTooltips,
+        hoverinfo: 'text',
+        traceData: pointsTrace,
+        mode: 'markers',
+        type: 'scatter',
+        showlegend: false,
+        marker: {
+            size: 16,
+            color: themeColors.pointColor,
+            line: {
+                color: themeColors.backgroundColor,
+                width: 1
+            }
+        }
+    };
+    data.push(points);
 
     // Explicitly set the width and height based on the container div.
     // If there is no explicit width and height, Plotly will use the rendered container size.
@@ -255,7 +317,7 @@ window.initializeChart = function (id, traces, xValues, rangeStartTime, rangeEnd
             fixedrange: true,
             color: themeColors.textColor
         },
-        hovermode: "x",
+        hovermode: "closest",
         showlegend: true,
         legend: {
             orientation: "h",
@@ -273,6 +335,39 @@ window.initializeChart = function (id, traces, xValues, rangeStartTime, rangeEnd
     Plotly.newPlot(chartDiv, data, layout, options);
 
     fixTraceLineRendering(chartDiv);
+
+    // We only want a pointer cursor when the mouse is hovering over an exemplar point.
+    // Set the drag layer cursor back to the default and then use plotly_hover/ploty_unhover events to set to pointer.
+    dragLayer = document.getElementsByClassName('nsewdrag')[0];
+    dragLayer.style.cursor = 'default';
+
+    // Use mousedown instead of plotly_click event because plotly_click has issues with updating charts.
+    // The current point is tracked by setting it with hover/unhover events and then mousedown uses the current value.
+    var currentPoint = null;
+    chartDiv.on('plotly_hover', function (data) {
+        var point = data.points[0];
+        if (point.fullData.name == 'exemplars') {
+            currentPoint = point;
+            var pointTraceData = point.data.traceData[point.pointIndex];
+            dragLayer.style.cursor = 'pointer';
+        }
+    });
+    chartDiv.on('plotly_unhover', function (data) {
+        var point = data.points[0];
+        if (point.fullData.name == 'exemplars') {
+            currentPoint = null;
+            dragLayer.style.cursor = 'default';
+        }
+    });
+    chartDiv.addEventListener("mousedown", (e) => {
+        if (currentPoint) {
+            var point = currentPoint;
+            var pointTraceData = point.data.traceData[point.pointIndex];
+
+            console.log(`ViewSpan - TraceId: ${pointTraceData.traceId}, SpanId: ${pointTraceData.spanId}`);
+            chartInterop.invokeMethodAsync('ViewSpan', pointTraceData.traceId, pointTraceData.spanId);
+        }
+    });
 };
 
 function registerLocale(serverLocale) {

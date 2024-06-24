@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 namespace Aspire.Dashboard.Components.Controls.Chart;
@@ -10,4 +10,12 @@ public sealed class ChartTrace
     public List<double?> Values { get; } = new();
     public List<double?> DiffValues { get; } = new();
     public List<string?> Tooltips { get; } = new();
+}
+
+public class ExemplarPoint
+{
+    public DateTimeOffset Start { get; init; }
+    public double Value { get; init; }
+    public string? TraceId { get; init; }
+    public string? SpanId { get; init; }
 }

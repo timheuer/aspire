@@ -72,7 +72,7 @@ public class PlotlyChartTests : TestContext
             AsInt = 1,
             StartTimeUnixNano = 0,
             TimeUnixNano = long.MaxValue
-        });
+        }, options);
 
         await model.UpdateDataAsync(instrument, new List<DimensionScope>
         {
@@ -101,7 +101,7 @@ public class PlotlyChartTests : TestContext
 
     private sealed class TestInstrumentUnitResolver : IInstrumentUnitResolver
     {
-        public string ResolveDisplayedUnit(OtlpInstrument instrument)
+        public string ResolveDisplayedUnit(OtlpInstrument instrument, bool titleCase, bool pluralize)
         {
             return instrument.Unit;
         }

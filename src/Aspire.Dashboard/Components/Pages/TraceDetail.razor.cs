@@ -26,6 +26,10 @@ public partial class TraceDetail : ComponentBase
     [Parameter]
     public required string TraceId { get; set; }
 
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public required string? SpanId { get; set; }
+
     [Inject]
     public required TelemetryRepository TelemetryRepository { get; set; }
 
@@ -182,9 +186,20 @@ public partial class TraceDetail : ComponentBase
         return OtlpHelpers.GetPeerAddress(span.Attributes);
     }
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         UpdateDetailViewData();
+
+        if (SpanId is not null && _spanWaterfallViewModels is not null)
+        {
+            var spanVm = _spanWaterfallViewModels.SingleOrDefault(vm => vm.Span.SpanId == SpanId);
+            if (spanVm != null)
+            {
+                await OnShowPropertiesAsync(spanVm, buttonId: null);
+            }
+
+            SpanId = null;
+        }
     }
 
     private void UpdateDetailViewData()
@@ -262,7 +277,7 @@ public partial class TraceDetail : ComponentBase
             {
                 Span = viewModel.Span,
                 Properties = entryProperties,
-                Title = $"{GetResourceName(viewModel.Span.Source)}: {viewModel.GetDisplaySummary()}"
+                Title = SpanWaterfallViewModel.GetTitle(viewModel.Span, _applications)
             };
 
             SelectedSpan = spanDetailsViewModel;

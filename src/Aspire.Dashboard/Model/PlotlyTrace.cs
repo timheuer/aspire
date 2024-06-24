@@ -10,6 +10,15 @@ public class PlotlyTrace
     public required List<string?> Tooltips { get; init; }
 }
 
+public class PlotlyExemplar
+{
+    public required DateTimeOffset Start { get; init; }
+    public required double Value { get; init; }
+    public required string? TraceId { get; init; }
+    public required string? SpanId { get; init; }
+    public required string Tooltip { get; init; }
+}
+
 public class PlotlyUserLocale
 {
     public required string Time { get; init; }

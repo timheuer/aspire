@@ -2,20 +2,49 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Web;
 using Aspire.Dashboard.Components.Controls.Chart;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.Otlp;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class PlotlyChart : ChartBase
+public partial class PlotlyChart : ChartBase, IDisposable
 {
     [Inject]
     public required IJSRuntime JS { get; init; }
 
-    protected override async Task OnChartUpdated(List<ChartTrace> traces, List<DateTimeOffset> xValues, bool tickUpdate, DateTimeOffset inProgressDataTime)
+    [Inject]
+    public required NavigationManager NavigationManager { get; init; }
+
+    [Inject]
+    public required TelemetryRepository TelemetryRepository { get; init; }
+
+    private DotNetObjectReference<ChartInterop>? _chartInteropReference;
+
+    // Stores a cache of the last set of spans returned as exemplars.
+    // This dictionary is replaced each time the chart is updated.
+    private Dictionary<SpanKey, OtlpSpan> _traceCache = new Dictionary<SpanKey, OtlpSpan>();
+
+    private readonly record struct SpanKey(string TraceId, string SpanId);
+
+    private string FormatTooltip(string title, double yValue, DateTimeOffset xValue)
+    {
+        var formattedValue = FormatHelpers.FormatNumberWithOptionalDecimalPlaces(yValue, maxDecimalPlaces: 3, CultureInfo.CurrentCulture);
+        if (InstrumentViewModel?.Instrument is { } instrument)
+        {
+            formattedValue += " " + InstrumentUnitResolver.ResolveDisplayedUnit(instrument, titleCase: false, pluralize: yValue != 1);
+        }
+        return $"<b>{HttpUtility.HtmlEncode(title)}</b><br />Value: {formattedValue}<br />Time: {FormatHelpers.FormatTime(TimeProvider, TimeProvider.ToLocal(xValue))}";
+    }
+
+    protected override async Task OnChartUpdated(List<ChartTrace> traces, List<DateTimeOffset> xValues, List<ExemplarPoint> exemplarPoints, bool tickUpdate, DateTimeOffset inProgressDataTime)
     {
         var traceDtos = traces.Select(y => new PlotlyTrace
         {
@@ -23,6 +52,47 @@ public partial class PlotlyChart : ChartBase
             Values = y.DiffValues,
             Tooltips = y.Tooltips
         }).ToArray();
+
+        var currentCache = _traceCache;
+        var newCache = new Dictionary<SpanKey, OtlpSpan>();
+
+        var exemplarDtos = new List<PlotlyExemplar>();
+        foreach (var exemplarPoint in exemplarPoints)
+        {
+            if (exemplarPoint.TraceId == null || exemplarPoint.SpanId == null)
+            {
+                continue;
+            }
+
+            var key = new SpanKey(exemplarPoint.TraceId, exemplarPoint.SpanId);
+            if (!currentCache.TryGetValue(key, out var span))
+            {
+                var trace = TelemetryRepository.GetTrace(exemplarPoint.TraceId);
+                if (trace != null)
+                {
+                    span = trace.Spans.FirstOrDefault(s => s.SpanId == exemplarPoint.SpanId);
+                }
+            }
+
+            if (span != null)
+            {
+                newCache[key] = span;
+            }
+
+            var title = span != null
+                ? SpanWaterfallViewModel.GetTitle(span, Applications)
+                : $"Trace: {OtlpHelpers.ToShortenedId(exemplarPoint.TraceId)}";
+            exemplarDtos.Add(new PlotlyExemplar
+            {
+                SpanId = exemplarPoint.SpanId,
+                TraceId = exemplarPoint.TraceId,
+                Start = exemplarPoint.Start,
+                Value = exemplarPoint.Value,
+                Tooltip = FormatTooltip(title, exemplarPoint.Value, exemplarPoint.Start)
+            });
+
+            _traceCache = newCache;
+        }
 
         if (!tickUpdate)
         {
@@ -36,13 +106,18 @@ public partial class PlotlyChart : ChartBase
                 Time = time
             };
 
+            _chartInteropReference?.Dispose();
+            _chartInteropReference = DotNetObjectReference.Create(new ChartInterop(this));
+
             await JS.InvokeVoidAsync("initializeChart",
                 "plotly-chart-container",
                 traceDtos,
                 xValues,
+                exemplarDtos,
                 TimeProvider.ToLocal(inProgressDataTime),
                 TimeProvider.ToLocal(inProgressDataTime - Duration).ToLocalTime(),
-                userLocale).ConfigureAwait(false);
+                userLocale,
+                _chartInteropReference).ConfigureAwait(false);
         }
         else
         {
@@ -50,8 +125,26 @@ public partial class PlotlyChart : ChartBase
                 "plotly-chart-container",
                 traceDtos,
                 xValues,
+                exemplarDtos,
                 TimeProvider.ToLocal(inProgressDataTime),
                 TimeProvider.ToLocal(inProgressDataTime - Duration)).ConfigureAwait(false);
+        }
+    }
+
+    public void Dispose()
+    {
+        _chartInteropReference?.Dispose();
+    }
+
+    private sealed class ChartInterop(PlotlyChart plotlyChart)
+    {
+        [JSInvokable]
+        public async Task ViewSpan(string traceId, string spanId)
+        {
+            await plotlyChart.InvokeAsync(() =>
+            {
+                plotlyChart.NavigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(traceId, spanId));
+            });
         }
     }
 }

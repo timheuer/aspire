@@ -5,9 +5,13 @@ using System.Diagnostics;
 
 namespace Aspire.Dashboard.Otlp.Model.MetricValues;
 
-[DebuggerDisplay("Start = {Start}, End = {End}")]
+[DebuggerDisplay("Start = {Start}, End = {End}, Exemplars = {Exemplars.Count}")]
 public abstract class MetricValueBase
 {
+    private List<MetricsExemplar>? _exemplars;
+
+    public List<MetricsExemplar> Exemplars => _exemplars ??= new List<MetricsExemplar>();
+    public bool HasExemplars => _exemplars != null && _exemplars.Count > 0;
     public DateTime Start { get; set; }
     public DateTime End { get; set; }
     public ulong Count = 1;
@@ -26,4 +30,13 @@ public abstract class MetricValueBase
     internal abstract bool TryCompare(MetricValueBase other, out int comparisonResult);
 
     protected abstract MetricValueBase Clone();
+}
+
+public sealed class MetricsExemplar
+{
+    public required double Value { get; init; }
+    public required DateTime Start { get; init; }
+    public required string SpanId { get; init; }
+    public required string TraceId { get; init; }
+    public required KeyValuePair<string, string>[] Attributes { get; init; }
 }
