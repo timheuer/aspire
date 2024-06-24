@@ -133,7 +133,7 @@ $CoberturaReport.coverage.packages.package | ForEach-Object {
         [int]$lowestReported100 = [math]::Min($lineCoverage100, $branchCoverage100);
         [int]$lowestReported = [math]::Round($lowestReported100 / 100, 2);
         Write-Verbose "$Name line: $LineCoverage, branch: $BranchCoverage, min: $lowestReported, threshold: $MinCodeCoverage"
-        if ([int]$minCoverage100 -lt $lowestReported) {
+        if ([int]$MinCodeCoverage -lt $lowestReported) {
             $KudosMarkdown += "| $Name | $MinCodeCoverage | **$lowestReported** |"
             [void]$Kudos.Add(
                 (
