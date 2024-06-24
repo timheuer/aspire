@@ -179,7 +179,7 @@ function fixTraceLineRendering(chartDiv) {
     }
 }
 
-window.updateChart = function (id, traces, xValues, exemplarPoints, rangeStartTime, rangeEndTime) {
+window.updateChart = function (id, traces, exemplarTrace, rangeStartTime, rangeEndTime) {
     //return;
     var chartContainerDiv = document.getElementById(id);
     var chartDiv = chartContainerDiv.firstChild;
@@ -191,26 +191,16 @@ window.updateChart = function (id, traces, xValues, exemplarPoints, rangeStartTi
     var tooltipsUpdate = [];
     var traceData = [];
     for (var i = 0; i < traces.length; i++) {
-        xUpdate.push(xValues);
-        yUpdate.push(traces[i].values);
+        xUpdate.push(traces[i].x);
+        yUpdate.push(traces[i].y);
         tooltipsUpdate.push(traces[i].tooltips);
-        traceData.push([]);
+        traceData.push(traces.traceData);
     }
 
-    var xPoints = [];
-    var yPoints = [];
-    var pointTooltips = [];
-    var pointTraceData = [];
-    for (var j = 0; j < exemplarPoints.length; j++) {
-        xPoints.push(exemplarPoints[j].start);
-        yPoints.push(exemplarPoints[j].value);
-        pointTooltips.push(exemplarPoints[j].tooltip);
-        pointTraceData.push({ traceId: exemplarPoints[j].traceId, spanId: exemplarPoints[j].spanId });
-    }
-    xUpdate.push(xPoints);
-    yUpdate.push(yPoints);
-    tooltipsUpdate.push(pointTooltips);
-    traceData.push(pointTraceData);
+    xUpdate.push(exemplarTrace.x);
+    yUpdate.push(exemplarTrace.y);
+    tooltipsUpdate.push(exemplarTrace.tooltips);
+    traceData.push(exemplarTrace.traceData);
 
     var data = {
         x: xUpdate,
@@ -234,7 +224,7 @@ window.updateChart = function (id, traces, xValues, exemplarPoints, rangeStartTi
     fixTraceLineRendering(chartDiv);
 };
 
-window.initializeChart = function (id, traces, xValues, exemplarPoints, rangeStartTime, rangeEndTime, serverLocale, chartInterop) {
+window.initializeChart = function (id, traces, exemplarTrace, rangeStartTime, rangeEndTime, serverLocale, chartInterop) {
     registerLocale(serverLocale);
 
     var chartContainerDiv = document.getElementById(id);
@@ -250,8 +240,8 @@ window.initializeChart = function (id, traces, xValues, exemplarPoints, rangeSta
     for (var i = 0; i < traces.length; i++) {
         var name = traces[i].name || "Value";
         var t = {
-            x: xValues,
-            y: traces[i].values,
+            x: traces[i].x,
+            y: traces[i].y,
             name: name,
             text: traces[i].tooltips,
             hoverinfo: 'text',
@@ -260,24 +250,13 @@ window.initializeChart = function (id, traces, xValues, exemplarPoints, rangeSta
         data.push(t);
     }
 
-    var xPoints = [];
-    var yPoints = [];
-    var pointsTrace = [];
-    var pointsTooltips = [];
-    for (var j = 0; j < exemplarPoints.length; j++) {
-        xPoints.push(exemplarPoints[j].start);
-        yPoints.push(exemplarPoints[j].value);
-        pointsTooltips.push(exemplarPoints[j].tooltip);
-        pointsTrace.push({ traceId: exemplarPoints[j].traceId, spanId: exemplarPoints[j].spanId });
-    }
-
     var points = {
-        x: xPoints,
-        y: yPoints,
-        name: 'exemplars',
-        text: pointsTooltips,
+        x: exemplarTrace.x,
+        y: exemplarTrace.y,
+        name: exemplarTrace.name,
+        text: exemplarTrace.tooltips,
         hoverinfo: 'text',
-        traceData: pointsTrace,
+        traceData: exemplarTrace.traceData,
         mode: 'markers',
         type: 'scatter',
         showlegend: false,

@@ -90,7 +90,7 @@ public sealed class SpanWaterfallViewModel
                     return summary;
                 }
 
-                return $"RPC {rpcSystem} {rpcService}/{rpcMethod}";
+                return $"RPC {rpcService}/{rpcMethod}";
             }
             else if (!string.IsNullOrEmpty(OtlpHelpers.GetValue(span.Attributes, "messaging.system")))
             {

@@ -46,17 +46,27 @@ public partial class PlotlyChart : ChartBase, IDisposable
 
     protected override async Task OnChartUpdated(List<ChartTrace> traces, List<DateTimeOffset> xValues, List<ExemplarPoint> exemplarPoints, bool tickUpdate, DateTimeOffset inProgressDataTime)
     {
-        var traceDtos = traces.Select(y => new PlotlyTrace
+        var traceDtos = traces.Select(t => new PlotlyTrace
         {
-            Name = y.Name,
-            Values = y.DiffValues,
-            Tooltips = y.Tooltips
+            Name = t.Name,
+            Y = t.DiffValues,
+            X = xValues,
+            Tooltips = t.Tooltips,
+            TraceData = new List<object?>()
         }).ToArray();
 
         var currentCache = _traceCache;
         var newCache = new Dictionary<SpanKey, OtlpSpan>();
 
-        var exemplarDtos = new List<PlotlyExemplar>();
+        var exemplarTraceDto = new PlotlyTrace
+        {
+            Name = "exemplars",
+            Y = new List<double?>(),
+            X = new List<DateTimeOffset>(),
+            Tooltips = new List<string?>(),
+            TraceData = new List<object?>()
+        };
+
         foreach (var exemplarPoint in exemplarPoints)
         {
             if (exemplarPoint.TraceId == null || exemplarPoint.SpanId == null)
@@ -82,17 +92,15 @@ public partial class PlotlyChart : ChartBase, IDisposable
             var title = span != null
                 ? SpanWaterfallViewModel.GetTitle(span, Applications)
                 : $"Trace: {OtlpHelpers.ToShortenedId(exemplarPoint.TraceId)}";
-            exemplarDtos.Add(new PlotlyExemplar
-            {
-                SpanId = exemplarPoint.SpanId,
-                TraceId = exemplarPoint.TraceId,
-                Start = exemplarPoint.Start,
-                Value = exemplarPoint.Value,
-                Tooltip = FormatTooltip(title, exemplarPoint.Value, exemplarPoint.Start)
-            });
+            var tooltip = FormatTooltip(title, exemplarPoint.Value, exemplarPoint.Start);
 
-            _traceCache = newCache;
+            exemplarTraceDto.X.Add(exemplarPoint.Start);
+            exemplarTraceDto.Y.Add(exemplarPoint.Value);
+            exemplarTraceDto.Tooltips.Add(tooltip);
+            exemplarTraceDto.TraceData.Add(new { TraceId = exemplarPoint.TraceId, SpanId = exemplarPoint.SpanId });
         }
+
+        _traceCache = newCache;
 
         if (!tickUpdate)
         {
@@ -112,8 +120,7 @@ public partial class PlotlyChart : ChartBase, IDisposable
             await JS.InvokeVoidAsync("initializeChart",
                 "plotly-chart-container",
                 traceDtos,
-                xValues,
-                exemplarDtos,
+                exemplarTraceDto,
                 TimeProvider.ToLocal(inProgressDataTime),
                 TimeProvider.ToLocal(inProgressDataTime - Duration).ToLocalTime(),
                 userLocale,
@@ -124,8 +131,7 @@ public partial class PlotlyChart : ChartBase, IDisposable
             await JS.InvokeVoidAsync("updateChart",
                 "plotly-chart-container",
                 traceDtos,
-                xValues,
-                exemplarDtos,
+                exemplarTraceDto,
                 TimeProvider.ToLocal(inProgressDataTime),
                 TimeProvider.ToLocal(inProgressDataTime - Duration)).ConfigureAwait(false);
         }

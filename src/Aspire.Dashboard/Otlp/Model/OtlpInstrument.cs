@@ -43,10 +43,6 @@ public class OtlpInstrument
             case Metric.DataOneofCase.Histogram:
                 foreach (var d in metric.Histogram.DataPoints)
                 {
-                    if (d.Exemplars.Count > 0)
-                    {
-                        _ = string.Empty;
-                    }
                     FindScope(d.Attributes, ref tempAttributes).AddHistogramValue(d, Options);
                 }
                 break;
