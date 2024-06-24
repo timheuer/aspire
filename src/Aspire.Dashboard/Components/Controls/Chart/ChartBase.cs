@@ -109,6 +109,7 @@ public abstract class ChartBase : ComponentBase
         var exemplarPoints = new List<ExemplarPoint>();
         var startDate = _currentDataStartTime;
         DateTimeOffset? firstPointEndTime = null;
+        DateTimeOffset? lastPointStartTime = null;
 
         // Generate the points in reverse order so that the chart is drawn from right to left.
         // Add a couple of extra points to the end so that the chart is drawn all the way to the right edge.
@@ -117,6 +118,7 @@ public abstract class ChartBase : ComponentBase
             var start = CalcOffset(pointIndex, startDate, pointDuration);
             var end = CalcOffset(pointIndex - 1, startDate, pointDuration);
             firstPointEndTime ??= end;
+            lastPointStartTime = start;
 
             xValues.Add(TimeProvider.ToLocalDateTimeOffset(end));
 
@@ -165,6 +167,9 @@ public abstract class ChartBase : ComponentBase
 
             previousValues = currentTrace;
         }
+
+        exemplarPoints = exemplarPoints.Where(p => p.Start <= startDate && p.Start >= lastPointStartTime!.Value).ToList();
+
         return (traces.Select(kvp => kvp.Value).ToList(), xValues, exemplarPoints);
     }
 
@@ -208,16 +213,13 @@ public abstract class ChartBase : ComponentBase
                         foreach (var exemplar in metric.Exemplars)
                         {
                             var exemplarStart = TimeProvider.ToLocalDateTimeOffset(exemplar.Start);
-                            if (exemplarStart >= start && exemplarStart <= end)
+                            exemplarPoints.Add(new ExemplarPoint
                             {
-                                exemplarPoints.Add(new ExemplarPoint
-                                {
-                                    Start = exemplarStart,
-                                    Value = exemplar.Value,
-                                    TraceId = exemplar.TraceId,
-                                    SpanId = exemplar.SpanId
-                                });
-                            }
+                                Start = exemplarStart,
+                                Value = exemplar.Value,
+                                TraceId = exemplar.TraceId,
+                                SpanId = exemplar.SpanId
+                            });
                         }
                     }
 

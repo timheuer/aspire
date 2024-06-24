@@ -6,6 +6,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -31,16 +32,19 @@ public partial class TraceDetail : ComponentBase
     public required string? SpanId { get; set; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; set; }
+    public required TelemetryRepository TelemetryRepository { get; init; }
 
     [Inject]
-    public required IEnumerable<IOutgoingPeerResolver> OutgoingPeerResolvers { get; set; }
+    public required IEnumerable<IOutgoingPeerResolver> OutgoingPeerResolvers { get; init; }
 
     [Inject]
-    public required BrowserTimeProvider TimeProvider { get; set; }
+    public required BrowserTimeProvider TimeProvider { get; init; }
 
     [Inject]
-    public required IJSRuntime JS { get; set; }
+    public required IJSRuntime JS { get; init; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; init; }
 
     protected override void OnInitialized()
     {
@@ -198,7 +202,8 @@ public partial class TraceDetail : ComponentBase
                 await OnShowPropertiesAsync(spanVm, buttonId: null);
             }
 
-            SpanId = null;
+            // Navigate to remove ?spanId=xxx in the URL.
+            NavigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(TraceId), new NavigationOptions { ReplaceHistoryEntry = true });
         }
     }
 
